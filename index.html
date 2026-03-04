@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Premium Air Draw</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<style>
+body{
+margin:0;
+overflow:hidden;
+background:linear-gradient(135deg,#000000,#0a0a0f);
+font-family:Arial;
+color:white;
+}
+
+#drawCanvas{
+position:absolute;
+top:0;
+left:0;
+}
+
+#video{
+position:fixed;
+bottom:15px;
+right:15px;
+width:220px;
+border-radius:20px;
+border:2px solid #00ffff;
+box-shadow:0 0 20px #00ffff;
+transform: scaleX(-1);
+animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float{
+0%{transform:translateY(0) scaleX(-1);}
+50%{transform:translateY(-10px) scaleX(-1);}
+100%{transform:translateY(0) scaleX(-1);}
+}
+
+#panel{
+position:fixed;
+top:15px;
+left:15px;
+background:rgba(0,0,0,0.6);
+backdrop-filter:blur(10px);
+padding:20px;
+border-radius:20px;
+box-shadow:0 0 20px #00ffff55;
+animation: fadeIn 1.5s ease;
+}
+
+@keyframes fadeIn{
+from{opacity:0;transform:translateY(-20px);}
+to{opacity:1;transform:translateY(0);}
+}
+
+button{
+background:#111;
+color:#00ffff;
+border:1px solid #00ffff;
+padding:8px 12px;
+border-radius:10px;
+cursor:pointer;
+transition:0.3s;
+}
+
+button:hover{
+background:#00ffff;
+color:black;
+transform:scale(1.1);
+box-shadow:0 0 15px #00ffff;
+}
+
+input[type="range"]{
+accent-color:#00ffff;
+}
+
+#guide{
+position:fixed;
+bottom:15px;
+left:15px;
+background:rgba(0,0,0,0.4);
+padding:10px;
+border-radius:10px;
+font-size:14px;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="drawCanvas"></canvas>
+<video id="video" autoplay playsinline></video>
+
+<div id="panel">
+🎨 <input type="color" id="color" value="#00ffff"><br>
+📏 <input type="range" id="size" min="2" max="30" value="6"><br>
+<button onclick="clearCanvas()">🧽 Clear</button>
+<button onclick="saveImage()">💾 Save</button>
+<button onclick="toggleNeon()">🌈 Neon</button>
+<button onclick="startRecording()">🎥 Record</button>
+<button onclick="stopRecording()">⏹ Stop</button>
+</div>
+
+<div id="guide">
+☝️ 1 barmoq – Chizish <br>
+✌️ 2 barmoq – O‘chirish <br>
+✊ Yopiq qo‘l – To‘xtatish
+</div>
+
+<audio id="bgMusic" autoplay loop>
+<source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3" type="audio/mp3">
+</audio>
+
+
+<script>
+const canvas=document.getElementById("drawCanvas");
+const ctx=canvas.getContext("2d");
+const video=document.getElementById("video");
+
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+
+let prevX=null,prevY=null;
+let smoothX=null,smoothY=null;
+let neon=false;
+
+const color=document.getElementById("color");
+const size=document.getElementById("size");
+
+function clearCanvas(){
+ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+function saveImage(){
+const link=document.createElement("a");
+link.download="premium_draw.png";
+link.href=canvas.toDataURL();
+link.click();
+}
+
+function toggleNeon(){ neon=!neon; }
+
+function smooth(current, previous){
+return previous + (current - previous)*0.35;
+}
+
+function distance(a,b){
+return Math.hypot(a.x-b.x,a.y-b.y);
+}
+
+const hands=new Hands({
+locateFile:(file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+
+hands.setOptions({
+maxNumHands:1,
+modelComplexity:1,
+minDetectionConfidence:0.85,
+minTrackingConfidence:0.85
+});
+
+hands.onResults(results=>{
+if(results.multiHandLandmarks.length>0){
+
+const lm=results.multiHandLandmarks[0];
+
+let x=(1-lm[8].x)*canvas.width;
+let y=lm[8].y*canvas.height;
+
+if(smoothX==null){
+smoothX=x;
+smoothY=y;
+}else{
+smoothX=smooth(x,smoothX);
+smoothY=smooth(y,smoothY);
+}
+
+const thumb={x:lm[4].x*canvas.width,y:lm[4].y*canvas.height};
+const index={x:lm[8].x*canvas.width,y:lm[8].y*canvas.height};
+
+const pinch=distance(thumb,index)<40; // 2 barmoq birlashsa
+
+// Faqat kursor
+ctx.beginPath();
+ctx.arc(smoothX,smoothY,6,0,2*Math.PI);
+ctx.fillStyle="#ff0000";
+ctx.fill();
+
+if(pinch){ // Faqat 2 barmoqda chizadi
+
+if(prevX!=null){
+ctx.strokeStyle=color.value;
+ctx.lineWidth=size.value;
+ctx.lineCap="round";
+ctx.shadowBlur=neon?25:0;
+ctx.shadowColor=color.value;
+
+ctx.beginPath();
+ctx.moveTo(prevX,prevY);
+ctx.lineTo(smoothX,smoothY);
+ctx.stroke();
+}
+
+prevX=smoothX;
+prevY=smoothY;
+
+}else{
+prevX=null;
+}
+
+}else{
+prevX=null;
+}
+});
+
+const camera=new Camera(video,{
+onFrame:async()=>{await hands.send({image:video});},
+width:960,
+height:720
+});
+camera.start();
+</script>
+
+</body>
+</html>
